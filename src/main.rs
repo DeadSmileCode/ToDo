@@ -1,4 +1,5 @@
 use clap::{Arg, Command};
+use anyhow::Ok;
 
 fn cli_args() -> Command {
     Command::new("my-todo")
@@ -40,7 +41,11 @@ fn cli_args() -> Command {
 }
 
 
-fn main() {
+
+
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let matches = cli_args().get_matches();
 
     match matches.subcommand() {
@@ -78,5 +83,9 @@ fn main() {
         }
     }
 
+
+
     println!("Nothing to Do  XD XD XD");
+
+    Ok(())
 }
