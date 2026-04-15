@@ -1,6 +1,8 @@
 use clap::{Arg, Command};
 use anyhow::Ok;
-use sqlx::sqlite::SqlitePool;
+
+use sqlx::sqlite::{SqlitePoolOptions, SqliteConnectOptions};
+use std::str::FromStr;
 
 
 //- Prepare struct for parse cli args
@@ -53,7 +55,13 @@ async fn main() -> anyhow::Result<()> {
     let matches = cli_args().get_matches();
 
     //- Open Sqlite pool
-    let pool = SqlitePool::connect("sqlite://todos.sqlite").await?;
+    let pool_opts = SqliteConnectOptions::from_str("sqlite://todos.sqlite")?
+        .create_if_missing(true);
+
+    let pool = SqlitePoolOptions::new()
+        .connect_with(pool_opts).await?;
+    
+    // connect("sqlite:./todos.sqlite").await?;
 
     //- If code run first time -> create table
     //- If exists -> do nothing
