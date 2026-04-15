@@ -2,6 +2,7 @@ use clap::{Arg, Command};
 use anyhow::Ok;
 
 use sqlx::sqlite::{SqlitePoolOptions, SqliteConnectOptions};
+use sqlx::{Row, QueryBuilder};
 use std::str::FromStr;
 
 
@@ -80,7 +81,18 @@ async fn main() -> anyhow::Result<()> {
     //- Handle commands
     match matches.subcommand() {
         Some(("list", _)) => {
-            println!("List");
+            let list = sqlx::query("SELECT id, title FROM todos")
+                .fetch_all(&pool)
+                .await?;
+
+            for todo in list {
+                let id: i32 = todo.get("id");
+                let title: String = todo.get("title");
+                let body: String = todo.get("title");
+
+                println!("\x1b[1m{id}: {title}\x1b[0m\n\r\t{body}");
+                println!("");
+            }
         }
         Some(("add", sub_matches)) => {
             //- Prepare data from cli
@@ -116,21 +128,31 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Some(("delete", sub_matches)) => {
+            //- Prepare data from cli
             let list_ids: Vec<_> = sub_matches.get_many::<String>("list_id")
                 .unwrap_or_default()
                 .map(|s| s.as_str())
                 .collect();
 
             println!("Delete {:?}", list_ids);
+
+            //- Delete ToDos
+            let mut query = QueryBuilder::new("DELETE FROM todos WHERE id IN (");
+
+            let mut separated = query.separated(", ");
+            for id in list_ids {
+                separated.push_bind(id);
+            }            
+            query.push(")");
+
+            query.build()
+                .execute(&pool)
+                .await?;
         }
         _ => {
             println!("HAHAHA Imposible action!!");
         }
     }
-
-
-
-
 
     println!("Nothing to Do  XD XD XD");
 
