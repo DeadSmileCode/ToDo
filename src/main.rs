@@ -2,7 +2,7 @@ use clap::{Arg, Command};
 use anyhow::Ok;
 
 use sqlx::sqlite::{SqlitePoolOptions, SqliteConnectOptions};
-use sqlx::{Row, QueryBuilder};
+use sqlx::{QueryBuilder, Row, SqlitePool};
 use std::str::FromStr;
 
 
@@ -49,7 +49,6 @@ fn cli_args() -> Command {
 
 
 
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     //- Parse cli args
@@ -81,18 +80,7 @@ async fn main() -> anyhow::Result<()> {
     //- Handle commands
     match matches.subcommand() {
         Some(("list", _)) => {
-            let list = sqlx::query("SELECT id, title FROM todos")
-                .fetch_all(&pool)
-                .await?;
-
-            for todo in list {
-                let id: i32 = todo.get("id");
-                let title: String = todo.get("title");
-                let body: String = todo.get("title");
-
-                println!("\x1b[1m{id}: {title}\x1b[0m\n\r\t{body}");
-                println!("");
-            }
+            show_list(&pool).await?;
         }
         Some(("add", sub_matches)) => {
             //- Prepare data from cli
@@ -110,51 +98,83 @@ async fn main() -> anyhow::Result<()> {
                 .join(" ")
                 .to_string();
 
-            //- Printing for underdstand all good or not
-            println!("Add new ToDo");
-            println!("Title: {:?}", title);            
-            println!("Body:");
-            println!("{:?}", body);
-
-            //- Insert data in to DB
-            sqlx::query(
-                r#"
-                INSERT INTO todos (title, body) VALUES (?1, ?2)
-                "#
-            )
-            .bind::<String>(title)
-            .bind::<String>(body)
-            .execute(&pool)
-            .await?;
+            add_todo(&pool, title, body).await?;
         }
         Some(("delete", sub_matches)) => {
             //- Prepare data from cli
-            let list_ids: Vec<_> = sub_matches.get_many::<String>("list_id")
+            let list_ids: Vec<String> = sub_matches
+                .get_many::<String>("list_id")
                 .unwrap_or_default()
-                .map(|s| s.as_str())
+                .cloned()
                 .collect();
 
-            println!("Delete {:?}", list_ids);
-
-            //- Delete ToDos
-            let mut query = QueryBuilder::new("DELETE FROM todos WHERE id IN (");
-
-            let mut separated = query.separated(", ");
-            for id in list_ids {
-                separated.push_bind(id);
-            }            
-            query.push(")");
-
-            query.build()
-                .execute(&pool)
-                .await?;
+            delete_todos(&pool, list_ids).await?;
         }
         _ => {
             println!("HAHAHA Imposible action!!");
         }
     }
 
-    println!("Nothing to Do  XD XD XD");
+
+    Ok(())
+}
+
+
+
+
+async fn show_list(pool: &SqlitePool) -> anyhow::Result<()> {
+    let list = sqlx::query("SELECT id, title FROM todos")
+        .fetch_all(pool)
+        .await?;
+
+    for todo in list {
+        let id: i32 = todo.get("id");
+        let title: String = todo.get("title");
+        let body: String = todo.get("title");
+
+        println!("\x1b[1m{id}: {title}\x1b[0m\n\r\t{body}");
+        println!("");
+    }
+
+    Ok(())
+}
+
+async fn add_todo(pool: &SqlitePool, title: String, body: String) -> anyhow::Result<()> {
+    //- Printing for underdstand all good or not
+    println!("Add new ToDo");
+    println!("Title: {:?}", title);            
+    println!("Body:");
+    println!("{:?}", body);
+
+    //- Insert data in to DB
+    sqlx::query(
+        r#"
+        INSERT INTO todos (title, body) VALUES (?1, ?2)
+        "#
+    )
+    .bind::<String>(title)
+    .bind::<String>(body)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+async fn delete_todos(pool: &SqlitePool, list_ids: Vec<String>) -> anyhow::Result<()> {
+    println!("Delete {:?}", list_ids);
+
+    //- Delete ToDos
+    let mut query = QueryBuilder::new("DELETE FROM todos WHERE id IN (");
+
+    let mut separated = query.separated(", ");
+    for id in list_ids {
+        separated.push_bind(id);
+    }            
+    query.push(")");
+
+    query.build()
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
